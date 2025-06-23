@@ -1,0 +1,1003 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Parental Control SaaS API v2",
+    "description": "Complete API for parental control SaaS platform with multi-authentication support",
+    "version": "2.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@guardapi.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://api.guardapi.com",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "FirebaseAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "MicrosoftAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Tenant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "subscription_status": { "type": "string", "enum": ["active", "inactive", "past_due", "canceled"] },
+          "plan_id": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "user_count": { "type": "integer" },
+          "device_count": { "type": "integer" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "tenant_id": { "type": "integer" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["parent", "child", "admin"] },
+          "external_auth_id": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "tenant_id": { "type": "integer" },
+          "device_uid": { "type": "string" },
+          "name": { "type": "string" },
+          "os": { "type": "string", "enum": ["Android", "iOS", "Windows", "macOS"] },
+          "os_version": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "inactive", "blocked"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "App": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "device_id": { "type": "integer" },
+          "app_package": { "type": "string" },
+          "app_name": { "type": "string" },
+          "version": { "type": "string" },
+          "installed_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "price": { "type": "number" },
+          "billing_cycle": { "type": "string", "enum": ["monthly", "yearly"] },
+          "max_devices": { "type": "integer" },
+          "max_users": { "type": "integer" },
+          "features": { "type": "object" },
+          "active": { "type": "boolean" }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "user_id": { "type": "integer" },
+          "notification_type": { "type": "string" },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "data": { "type": "object" },
+          "read_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Invite": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "tenant_id": { "type": "integer" },
+          "invite_code": { "type": "string" },
+          "invitee_email": { "type": "string" },
+          "invite_type": { "type": "string", "enum": ["parent", "device"] },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "used_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" },
+          "error": { "type": "string" },
+          "requestId": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check API health and database connectivity",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "database": { "type": "string" },
+                    "timestamp": { "type": "string" },
+                    "uptime": { "type": "number" },
+                    "version": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tenants": {
+      "get": {
+        "summary": "Get All Tenants",
+        "description": "Retrieve all tenants with user and device counts",
+        "tags": ["Tenants"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of tenants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Tenant" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Tenant & First Parent",
+        "description": "Create a new tenant with the first parent user",
+        "tags": ["Tenants"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["familyName", "email", "externalAuthId", "name"],
+                "properties": {
+                  "familyName": { "type": "string", "minLength": 2 },
+                  "email": { "type": "string", "format": "email" },
+                  "externalAuthId": { "type": "string" },
+                  "name": { "type": "string", "minLength": 2 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tenant and parent created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tenant": { "$ref": "#/components/schemas/Tenant" },
+                    "parent": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}": {
+      "get": {
+        "summary": "Get Tenant by ID",
+        "description": "Retrieve a specific tenant by ID",
+        "tags": ["Tenants"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Tenant" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}/invites": {
+      "post": {
+        "summary": "Create Invite",
+        "description": "Create an invite for parent or device",
+        "tags": ["Tenants"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["inviteType"],
+                "properties": {
+                  "inviteeEmail": { "type": "string", "format": "email" },
+                  "inviteType": { "type": "string", "enum": ["parent", "device"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invite created successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invite" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}/invites/accept": {
+      "post": {
+        "summary": "Accept Parent Invite",
+        "description": "Accept a parent invite and create user account",
+        "tags": ["Tenants"],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["inviteCode", "email", "externalAuthId", "name"],
+                "properties": {
+                  "inviteCode": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "externalAuthId": { "type": "string" },
+                  "name": { "type": "string", "minLength": 2 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invite accepted and user created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}/audit-logs": {
+      "get": {
+        "summary": "Get Audit Logs",
+        "description": "Retrieve audit logs for a tenant",
+        "tags": ["Tenants"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "tenant_id": { "type": "integer" },
+                      "user_id": { "type": "integer" },
+                      "action": { "type": "string" },
+                      "resource_type": { "type": "string" },
+                      "resource_id": { "type": "integer" },
+                      "details": { "type": "object" },
+                      "created_at": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}/subscribe": {
+      "post": {
+        "summary": "Subscribe Tenant",
+        "description": "Subscribe tenant to a plan",
+        "tags": ["Tenants"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["priceId", "paymentMethodId"],
+                "properties": {
+                  "priceId": { "type": "string" },
+                  "paymentMethodId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription created successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Tenant" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "summary": "Get All Devices",
+        "description": "Retrieve all devices for the authenticated tenant",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Device" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/link": {
+      "post": {
+        "summary": "Link Device",
+        "description": "Link a device using invite code",
+        "tags": ["Devices"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["inviteCode", "deviceUid", "deviceName", "os", "osVersion"],
+                "properties": {
+                  "inviteCode": { "type": "string" },
+                  "deviceUid": { "type": "string" },
+                  "deviceName": { "type": "string", "minLength": 2 },
+                  "os": { "type": "string", "enum": ["Android", "iOS", "Windows", "macOS"] },
+                  "osVersion": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Device linked successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Device" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{deviceId}": {
+      "get": {
+        "summary": "Get Device by ID",
+        "description": "Retrieve a specific device by ID",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Device" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{deviceId}/apps": {
+      "get": {
+        "summary": "Get Installed Apps",
+        "description": "Retrieve installed apps for a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of installed apps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/App" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload Installed Apps",
+        "description": "Upload list of installed apps for a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["appPackage", "appName", "version", "installedAt"],
+                  "properties": {
+                    "appPackage": { "type": "string" },
+                    "appName": { "type": "string" },
+                    "version": { "type": "string" },
+                    "installedAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Apps uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{deviceId}/active-app": {
+      "get": {
+        "summary": "Get Active App",
+        "description": "Get the currently active app on a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active app details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "device_id": { "type": "integer" },
+                    "app_package": { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload Active App",
+        "description": "Upload the currently active app on a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["appPackage", "timestamp"],
+                "properties": {
+                  "appPackage": { "type": "string" },
+                  "timestamp": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Active app uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "device_id": { "type": "integer" },
+                    "app_package": { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{deviceId}/usage": {
+      "get": {
+        "summary": "Get Daily Usage",
+        "description": "Get app usage data for a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "device_id": { "type": "integer" },
+                      "app_package": { "type": "string" },
+                      "usage_date": { "type": "string", "format": "date" },
+                      "seconds_used": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload Daily Usage",
+        "description": "Upload daily app usage data for a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["appPackage", "usageDate", "secondsUsed"],
+                  "properties": {
+                    "appPackage": { "type": "string" },
+                    "usageDate": { "type": "string", "format": "date" },
+                    "secondsUsed": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usage data uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{deviceId}/system-metrics": {
+      "get": {
+        "summary": "Get System Metrics",
+        "description": "Get system metrics for a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "recent",
+            "in": "query",
+            "schema": { "type": "integer", "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "System metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "device_id": { "type": "integer" },
+                      "timestamp": { "type": "string", "format": "date-time" },
+                      "battery_level": { "type": "integer", "minimum": 0, "maximum": 100 },
+                      "uptime": { "type": "integer", "minimum": 0 },
+                      "memory_used": { "type": "integer", "minimum": 0 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload System Metrics",
+        "description": "Upload system metrics for a device",
+        "tags": ["Devices"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["timestamp", "batteryLevel", "uptime", "memoryUsed"],
+                "properties": {
+                  "timestamp": { "type": "string", "format": "date-time" },
+                  "batteryLevel": { "type": "integer", "minimum": 0, "maximum": 100 },
+                  "uptime": { "type": "integer", "minimum": 0 },
+                  "memoryUsed": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "System metrics uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "device_id": { "type": "integer" },
+                    "timestamp": { "type": "string", "format": "date-time" },
+                    "battery_level": { "type": "integer" },
+                    "uptime": { "type": "integer" },
+                    "memory_used": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/notifications": {
+      "get": {
+        "summary": "Get User Notifications",
+        "description": "Get notifications for a specific user",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Notification" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/{notificationId}/read": {
+      "patch": {
+        "summary": "Mark Notification as Read",
+        "description": "Mark a notification as read",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked as read",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Notification" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plans": {
+      "get": {
+        "summary": "List Plans",
+        "description": "Get all available subscription plans",
+        "tags": ["Plans"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Plan" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/webhook": {
+      "post": {
+        "summary": "Stripe Webhook",
+        "description": "Handle Stripe webhook events",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "type": { "type": "string" },
+                  "data": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "System health and monitoring endpoints"
+    },
+    {
+      "name": "Tenants",
+      "description": "Tenant management and organization endpoints"
+    },
+    {
+      "name": "Devices",
+      "description": "Device management and monitoring endpoints"
+    },
+    {
+      "name": "Notifications",
+      "description": "User notification management endpoints"
+    },
+    {
+      "name": "Plans",
+      "description": "Subscription plan management endpoints"
+    },
+    {
+      "name": "Billing",
+      "description": "Billing and payment processing endpoints"
+    }
+  ]
+} 
