@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../config/database');
 const Joi = require('joi');
 const router = express.Router();
+const multiAuth = require('../middleware/multiAuth');
 
 // Validation schemas
 const createUserSchema = Joi.object({
@@ -16,6 +17,9 @@ const updateUserSchema = Joi.object({
   name: Joi.string().min(2).max(255),
   role: Joi.string().valid('admin', 'parent', 'child')
 });
+
+// Apply multi-provider auth to all routes below
+router.use(multiAuth);
 
 // GET /api/users - Get all users
 router.get('/', async (req, res) => {
@@ -123,6 +127,10 @@ router.delete('/:id', async (req, res) => {
     console.error('Error deleting user:', error);
     res.status(500).json({ message: 'Failed to delete user' });
   }
+});
+
+router.get('/profile', (req, res) => {
+  res.json({ user: req.user });
 });
 
 module.exports = router; 
